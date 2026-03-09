@@ -1,0 +1,318 @@
+<script>
+    function prepareEmailData() {
+        const fromInput = document.getElementById("fromEmail");
+        const toInput = document.getElementById("toEmail");
+        const subject = document.getElementById("subject");
+        const messageBox = document.getElementById("messageBox");
+
+        let emailData = {
+            fromEmailAddress: "support@noorsha.zohodesk.in",
+            to: toInput.value,
+            content: messageBox.value,
+            channel: "EMAIL",
+            contentType: "html"
+        };
+
+        // Add dummy data if any field is empty (for dev)
+        // if (!emailData.fromEmailAddress) emailData.fromEmailAddress = "support@noorsha.zohodesk.in";
+        // if (!emailData.to) emailData.to = "mohamedfaaris.dev@gmail.com";
+        // if (!emailData.content) emailData.content = "Email can never be dead. The most neutral and effective way, that can be used for one to many and two way communication.";
+        console.log("[SEND] Email data:", emailData);
+        return emailData;
+    }
+</script>
+<!DOCTYPE html>
+<html>
+
+<head>
+    <meta charset="UTF-8">
+    <title>Zoho Desk - Mailzist</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 20px;
+            background-color: #1E1E2F;
+            color: #FFFFFF;
+        }
+
+        h2 {
+            color: #ffffff;
+        }
+
+        input,
+        textarea,
+        button {
+            width: 100%;
+            max-width: 500px;
+            margin: 10px 0;
+            padding: 10px;
+            border: 1px solid #58585c;
+            border-radius: 5px;
+            font-size: 16px;
+            background-color: #2E2E3F;
+            color: #FFFFFF;
+        }
+
+        button {
+            background-color: #4A90E2;
+            color: white;
+            border: none;
+            cursor: pointer;
+        }
+
+        button:hover {
+            background-color: #357ABD;
+        }
+
+        textarea {
+            height: 100px;
+            resize: none;
+        }
+
+        .container {
+            max-width: 600px;
+            margin: 0 auto;
+            padding: 20px;
+            background: #2E2E3F;
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.3);
+            border-radius: 10px;
+        }
+    </style>
+</head>
+
+<body>
+
+    <div class="container">
+        <h2>Mailzist - AI Email Assistant</h2>
+
+        <!-- Sample Inputs -->
+        <input type="text" id="fromEmail" placeholder="From Email"><br><br>
+        <input type="text" id="toEmail" placeholder="To Email"><br><br>
+        <textarea id="messageBox" placeholder="Generated message"></textarea><br><br>
+        <input type="text" id="promptInput" placeholder="Enter custom prompt">
+        <button id="searchPromptBtn">Refine prompt</button><br><br>
+        <button id="sendEmailBtn">Send Email</button>
+    </div>
+
+    <!-- Zoho Desk SDK -->
+    <script src="https://js.zohostatic.com/support/developer_sdk/v1/js/ZohoDeskClientSDK.min.js"></script>
+
+    <script>
+        let geminiApiKey = "";
+        let accountId = "";
+
+        window.onload = function () {
+            ZOHODESK.extension.onload().then(function (App) {
+                console.log("[INIT] App loaded:", App);
+
+                const fromInput = document.getElementById("fromEmail");
+                const toInput = document.getElementById("toEmail");
+                const messageBox = document.getElementById("messageBox");
+                const promptInput = document.getElementById("promptInput");
+                const searchBtn = document.getElementById("searchPromptBtn");
+                const sendBtn = document.getElementById("sendEmailBtn");
+
+                let ticketId = "";
+
+                // ====== Get Ticket ID ======
+                ZOHODESK.get("ticket.id").then(function (response) {
+                    console.log("[API] ticket.id:", response["ticket.id"]);
+                    ticketId = response["ticket.id"];
+                }).catch(function (err) {
+                    console.error("[ERROR] Fetching ticket.id:", err);
+                });
+
+                // ====== 1. Get From Email using Connector ======
+                ZOHODESK.get("extension.config").then(function (response) {
+                    let configData = response["extension.config"];
+                    console.log("[CONFIG] Extension config data:", configData);
+                    geminiApiKey = configData[0].value;
+                    articleId = configData[1].value;
+
+
+                    let EmailID = configData[2]?.value;
+                    fromInput.value = EmailID;
+                    console.log("[SET] From gemini API Key:", geminiApiKey);
+                    console.log("[SET] From Account ID:", accountId);
+                    console.log("[SET] From Email:", fromInput.value);
+                });
+
+                // ====== 2. Get To Email from Ticket ======
+                ZOHODESK.get("ticket.email").then(response => {
+                    if (response && response["ticket.email"]) {
+                        toInput.value = response["ticket.email"];
+                        console.log("[SET] To Email:", toInput.value);
+                    }
+                });
+
+                // ====== 3. Get Subject from Ticket & Call Gemini ======
+                ZOHODESK.get("ticket.subject").then(response => {
+                    if (response && response["ticket.subject"]) {
+                        let subject = response["ticket.subject"];
+                        console.log("[DATA] Subject:", subject);
+                        getKBArticle()
+                            .then(kb => fetchGeminiResponse(kb + " " + subject))
+                            .then(aiReply => {
+                                messageBox.value = aiReply;
+                                console.log("[SET] Message Box:", aiReply);
+                            })
+                            .catch(err => console.error("[ERROR]", err));
+
+                    }
+                }).catch(err => {
+                    console.error("[ERROR] Fetching ticket.subject:", err);
+                });
+
+                // ====== 4. Search Prompt Button ======
+                searchBtn.addEventListener("click", function () {
+                    let newPrompt = promptInput.value.trim();
+                    if (!newPrompt) return alert("Please enter a prompt");
+
+                    getKBArticle()
+                        .then(kb => fetchGeminiResponse(kb + " " + newPrompt))
+                        .then(aiReply => {
+                            messageBox.value = aiReply;
+                            console.log("[SET] Message Box:", aiReply);
+                        })
+                        .catch(err => console.error("[ERROR]", err));
+
+                });
+
+                // ====== 5. Send Email Button ======
+                sendBtn.addEventListener("click", function () {
+                    console.log("[SEND] Send Email button clicked");
+                    const emailData = prepareEmailData();
+                    console.log("[lOG] ticketId", ticketId);
+                    ZOHODESK.request({
+                        url: `https://desk.zoho.in/api/v1/tickets/${ticketId}/sendReply`,
+                        headers: { 'Content-type': 'application/json' },
+                        type: 'POST',
+                        postBody: emailData,
+                        connectionLinkName: 'sendemail',
+                        contentType: "application/json"
+                    }).then(resp => {
+                        console.log("[API] Email send response:", resp);
+                    }).catch(err => {
+                        console.error("[API ERROR] Email send failed:", err);
+                    });
+                });
+
+                // ====== Listen to Ticket Status Change (optional) ======
+                App.instance.on("ticket_status.changed", function (data) {
+                    console.log("[EVENT] Ticket status changed:", data);
+                    let dataParams = { ticketId };
+                    console.log("[DATA] Params:", dataParams);
+                });
+
+            });
+        };
+
+        // ====== 6. Gemini API Call ======
+        async function fetchGeminiResponse(prompt) {
+            try {
+                const requestObj = {
+                    url: "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent",
+                    type: "POST",
+                    headers: {
+                        "X-Goog-Api-Key": geminiApiKey, 
+                        "Content-Type": "application/json"
+                    },
+                    postBody: {
+                        contents: [{
+                            parts: [{ text: prompt }]
+                        }]
+                    },
+                    connectionLinkName: "geminiapi",
+                };
+
+
+                console.log("[REQUEST] Sending request:", JSON.stringify(requestObj));
+                const zohoResponse = await ZOHODESK.request(requestObj);
+                // const zohoResponse = {
+                //     "responseHeaders": {
+                //         "X-Frame-Options": "DENY",
+                //         "Strict-Transport-Security": "max-age=64072000; includeSubDomains; preload",
+                //         "Server": "ZGS",
+                //         "Cache-Control": "private,no-cache,no-store,max-age=0,must-revalidate",
+                //         "X-Content-Type-Options": "nosniff",
+                //         "Connection": "keep-alive",
+                //         "Vary": "sec-fetch-dest,sec-fetch-mode,sec-fetch-site,sec-fetch-user,accept-encoding",
+                //         "Pragma": "no-cache",
+                //         "Expires": "Thu, 01 Jan 1970 00:00:00 GMT",
+                //         "Date": "Tue, 12 Aug 2025 16:56:15 GMT",
+                //         "Content-Language": "en-US",
+                //         "Content-Type": "application/json;charset=utf-8"
+                //     },
+                //     "response": "{\"statusMessage\":{\"candidates\":[{\"avgLogprobs\":-0.050397910177707672,\"finishReason\":\"STOP\",\"content\":{\"role\":\"model\",\"parts\":[{\"text\":\"Okay, I'm ready. Please provide the details of the ticket.\\n\"}]}}],\"modelVersion\":\"gemini-1.5-flash\",\"usageMetadata\":{\"candidatesTokenCount\":16,\"promptTokensDetails\":[{\"modality\":\"TEXT\",\"tokenCount\":7}],\"totalTokenCount\":23,\"promptTokenCount\":7,\"candidatesTokensDetails\":[{\"modality\":\"TEXT\",\"tokenCount\":16}]},\"responseId\":\"LnKbaL7KDIycnvgPiKPb0Ag\"},\"status\":\"true\"}",
+                //     "statusCode": 200
+                // }
+                // --- KEY VALIDATION STEP ---
+                // Log the entire object to see what you're getting back from Zoho's wrapper
+
+                const parsedResponse = JSON.parse(JSON.parse(zohoResponse).response);
+                console.log("[RESPONSE] Parsed response:", parsedResponse);
+                // Step 2: Extract the content text
+                getKBArticle().then((res) => {
+                    console.log("[API] KB Article Content:", res);
+                }).catch((err) => {
+                    console.error("[API ERROR] Fetching KB Article:", err);
+                });
+                const contentText = parsedResponse.statusMessage.candidates[0].content.parts[0].text;
+                console.log("cotent", contentText);
+                return contentText;
+                // Check if the request was successful AND if the response property exists
+                if (zohoResponse.statusCode >= 200 && zohoResponse.statusCode < 300 && zohoResponse.response) {
+
+                    const geminiData = JSON.parse(zohoResponse.response);
+                    console.log("[PARSED GEMINI DATA]", geminiData);
+
+                    const aiText = geminiData?.candidates?.[0]?.content?.parts?.[0]?.text || "No valid text in AI response.";
+                    console.log("[RETURN] AI Text:", aiText);
+                    return aiText;
+
+                } else {
+                    // The API call FAILED. Log the details to find out why.
+                    console.error("[ERROR] API request failed.");
+                    console.error("[ERROR] Status Code:", zohoResponse.statusCode);
+                    // The error message from Google is likely in zohoResponse.response now
+                    console.error("[ERROR] Response Body:", zohoResponse.response);
+                }
+
+            } catch (error) {
+                // This outer catch block will handle network errors or if ZOHODESK.request itself throws an exception
+                console.error("[FATAL ERROR] The ZOHODESK.request call threw an exception:", error);
+                return "Error: Failed to execute the request.";
+                async function getKBArticle() {
+                    const data = JSON.parse(await ZOHODESK.request({
+                        url: `https://desk.zoho.in/api/v1/articles/${articleId}`,
+                        type: 'GET',
+                        postBody: {},
+                        connectionLinkName: 'article',
+                        headers: {
+                            "Content-Type": "application/json"
+                        },
+                        contentType: "application/json"
+                    }));
+        
+        
+                    // 🔁 Step 2: Parse the 'response' string (if 'data' is already an object, remove outer parse)
+                    const parsed = JSON.parse(data.response);
+        
+        
+                    // 📦 Step 3: Access 'statusMessage'
+                    const statusMessage = parsed.statusMessage;
+                    console.log("statusMessage", statusMessage);
+        
+                    // 📝 Step 4: Get the 'summary'
+                    const summary = statusMessage.answer;
+        
+                    // console.log(summary);
+                    return summary;
+                }
+            }
+        }
+    </script>
+
+</body>
+
+</html>

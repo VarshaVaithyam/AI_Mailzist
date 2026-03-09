@@ -1,0 +1,73 @@
+{
+  "locale": [
+    "en"
+  ],
+  "service": "DESK",
+  "storage": false,
+  "type": "personal",
+  "whiteListedDomains": [
+    "https://generativelanguage.googleapis.com",
+    "https://mail.zoho.in","https://desk.zoho.in",
+    "https://desk.zoho.com"
+  ],
+  "modules": {
+    "widgets": [
+      {
+        "location": "desk.ticket.detail.lefttab",
+        "url": "/app/widget.html",
+        "name": "Mailzist",
+        "logo": "/app/img/Mailzist.jpg",
+        "icon": "/app/img/Mailzist.jpg"
+      }
+    ]
+  },
+  "cspDomains": {
+    "connect-src": ["https://generativelanguage.googleapis.com"]
+  },
+  "zohoAuthorisation": {
+    "type": "connectors",
+	"connectionLinkName": "sendemail",
+	"connectionName": "Send Email",
+	"serviceName": "zlabs_integration",
+	"userAccess": true,
+	"isUserDefinedService": false,
+	"sharedBy": "60044871155",
+	"scope": [
+		"Desk.tickets.UPDATE"
+	]
+},
+  "connectors": [{
+    "connectionLinkName": "geminiapi",
+    "connectionName": "GeminiAPI",
+    "serviceName": "geminiapi",
+    "userAccess": true,
+    "isUserDefinedService": true,
+    "sharedBy": "60044871155"
+  },{}
+],
+"config": [
+  {
+    "name": "geminiApiKey",
+    "secure": false,
+    "type": "text",
+    "mandatory": true,
+    "userDefined": true
+  },
+
+  {
+    "name": "EmailID",
+    "secure": false,
+    "type": "text",
+    "mandatory": true,
+    "userDefined": true
+  },
+  {
+    "name": "articleID",
+    "secure": false,
+    "type": "text",
+    "mandatory": true,
+    "userDefined": true
+  }
+],
+"moduleSupport": true
+}
